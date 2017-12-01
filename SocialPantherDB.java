@@ -516,6 +516,39 @@ public class SocialPantherDB
 		}
 	}
 	
+	public void createGroup(String gID, String name, String description, String userID, int limit) {
+		int result = 1;
+		try {
+			query = "INSERT INTO GROUPS (?, ?, ?, ?)";
+			prepStatement = connection.prepareStatement(query);
+
+			// generate random group ID for the new group
+			prepStatement.setString(1, gID);
+			prepStatement.setString(2, name);
+			prepStatement.setString(3, description);
+			prepStatement.setInt(4, limit);
+			result=prepStatement.executeUpdate();
+
+			query2 = "INSERT INTO GROUPMEMBERSHIP (?, ?, Manager)";
+			prepStatement = connection.prepareStatement(query2);
+
+			prepStatement.setString(1, gID);
+			prepStatement.setString(2, userID);
+			result = prepStatement.executeUpdate();
+		}
+		catch(SQLException e) {
+			System.out.println("Exception found!");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+			return;
+		}
+
+	}
+	
 	public boolean initiateAddingGroup(String userID, String gID)
 	{
 		try{
