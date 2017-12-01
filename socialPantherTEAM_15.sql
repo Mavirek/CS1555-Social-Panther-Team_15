@@ -43,6 +43,7 @@ CREATE TABLE GROUPS(
   gID varchar2(20) not null deferrable,
   name varchar2(50) not null deferrable,
   description varchar2(200),
+  lim integer not null deferrable,
   CONSTRAINT GROUPS_PK PRIMARY KEY (gID) INITIALLY IMMEDIATE DEFERRABLE
 );
 ---Assumes users can be deleted but messages can still be retained, just without the deleted user
@@ -387,16 +388,16 @@ INSERT INTO FRIENDS values('295a0', '3dad9', '9-August-1946', 'Would you like to
 INSERT INTO FRIENDS values('dd0b1', 'e9f91', '3-February-1988', 'Would you like to be my friend?');
 INSERT INTO FRIENDS values('4d5de', 'c4686', '3-February-1930', 'Would you like to be my friend?');
 
-INSERT INTO GROUPS values(1, 'HSC', 'Hindu Students Council');
-INSERT INTO GROUPS values(2, 'CSC', 'Pitt Computer Science Club');
-INSERT INTO GROUPS values(3, 'Pitt Cycling', 'Competitive and casual cycling club');
-INSERT INTO GROUPS values(4, 'Pitt Triathlon', 'Swim, Bike, Run');
-INSERT INTO GROUPS values(5, 'Pitt XC', 'Just Run');
-INSERT INTO GROUPS values(6, 'Pitt Swimming', 'Just Swim');
-INSERT INTO GROUPS values(7, 'DECA', 'Business club that covers the four sectors of business');
-INSERT INTO GROUPS values(8, 'ASA', 'Asian Students Alliance');
-INSERT INTO GROUPS values(9, 'Pitt IEEE', 'Club for electrical/computer engineering students');
-INSERT INTO GROUPS values(10, 'Pitt Gaming', 'Competitive and casual gaming club');
+INSERT INTO GROUPS values(1, 'HSC', 'Hindu Students Council',4);
+INSERT INTO GROUPS values(2, 'CSC', 'Pitt Computer Science Club',4);
+INSERT INTO GROUPS values(3, 'Pitt Cycling', 'Competitive and casual cycling club',5);
+INSERT INTO GROUPS values(4, 'Pitt Triathlon', 'Swim, Bike, Run',5);
+INSERT INTO GROUPS values(5, 'Pitt XC', 'Just Run',4);
+INSERT INTO GROUPS values(6, 'Pitt Swimming', 'Just Swim',4);
+INSERT INTO GROUPS values(7, 'DECA', 'Business club that covers the four sectors of business',4);
+INSERT INTO GROUPS values(8, 'ASA', 'Asian Students Alliance',4);
+INSERT INTO GROUPS values(9, 'Pitt IEEE', 'Club for electrical/computer engineering students',4);
+INSERT INTO GROUPS values(10, 'Pitt Gaming', 'Competitive and casual gaming club',4);
 
 INSERT INTO MESSAGES values('1', '1e9d9', 'Sample Text', '1c808', null, '28-November-1945');
 INSERT INTO MESSAGES values('2', '9ba78', 'What''s up?', '7960d', null, '18-October-1905');
@@ -709,21 +710,23 @@ BEGIN
 END;
 /
 
-/*
-CREATE OR REPLACE TRIGGER MSGRECEIVE_TRIGGER
-AFTER INSERT ON MESSAGES
+CREATE OR REPLACE TRIGGER PENDINGFRIENDS_TRIGGER
+AFTER INSERT ON FRIENDS
 FOR EACH ROW
-DECLARE
-	messageID varchar2(20);
-	rUser varchar2(20);
 BEGIN
-	SELECT msgID INTO messageID
-	FROM MESSAGES
-	WHERE msgID = :new.msgID;
-	SELECT toUserID INTO rUser
-	FROM MESSAGES
-	WHERE msgID = :new.msgID;
-	INSERT INTO MESSAGERECIPIENT VALUES(messageID,rUser);
+	DELETE FROM PENDINGFRIENDS
+	WHERE (:new.userID1 = fromID AND :new.userID2 = toID)
+		OR (:new.userID1 = toID AND :new.userID2 = fromID);
 END;
 /
-*/
+
+--SELECT * FROM SYS.USER_ERRORS WHERE NAME = 'PENDINGFRIENDS_TRIGGER' AND TYPE = 'TRIGGER';
+
+CREATE OR REPLACE TRIGGER PENDINGGROUPMEMBERS_TRIGGER
+AFTER INSERT ON GROUPMEMBERSHIP
+FOR EACH ROW
+BEGIN
+	DELETE FROM PENDINGGROUPMEMEBERS
+	WHERE (:new.gID = gID AND :new.userID = userID);
+END;
+/
