@@ -520,7 +520,7 @@ public class SocialPantherDB
 		try{
 			Scanner s = new Scanner(System.in);
 			query = "INSERT INTO PENDINGGROUPMEMBERS values(?,?,?)";
-			prepStatement = connection.prepStatement(query);
+			prepStatement = connection.prepareStatement(query);
 			System.out.println("Enter a message for the group membership request:");
 			String msg = s.nextLine();
 			prepStatement.setString(1,gID);
@@ -561,7 +561,7 @@ public class SocialPantherDB
 			System.out.println("Enter your message:");
 			String msg = s.nextLine();
 			query = "SELECT MAX(msgID) AS maxID FROM MESSAGES";
-			prepStatement = connection.prepStatement(query);
+			prepStatement = connection.prepareStatement(query);
 			resultSet = prepStatement.executeQuery();
 			int maxID = 1;
 			if(resultSet.next())
@@ -570,12 +570,12 @@ public class SocialPantherDB
 			Calendar cal = Calendar.getInstance(); //current date
 			java.sql.Date date_reg = new java.sql.Date (cal.getTimeInMillis());
 			query = "INSERT INTO MESSAGES values(?,?,?,NULL,?,?)";
-			prepStatement = connection.prepStatement(query);
-			prepStatement.setString(1,maxID);
+			prepStatement = connection.prepareStatement(query);
+			prepStatement.setString(1,(maxID+""));
 			prepStatement.setString(2,userID);
 			prepStatement.setString(3,msg);
 			prepStatement.setString(4,gID);
-			prepStatement.setString(5,date_reg);
+			prepStatement.setDate(5,date_reg);
 			prepStatement.executeUpdate();
 			return true;
 		}
