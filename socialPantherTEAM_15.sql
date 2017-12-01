@@ -701,7 +701,7 @@ INSERT INTO MESSAGES values('299', '38eec', 'Sample Text', '1a812', null, '13-De
 INSERT INTO MESSAGES values('300', 'a29bb', 'asjdklfjlkdf', '2b1e4', null, '6-January-1955');
 
 commit;
-
+--after inserting into MESSAGES, insert that corresponding entry into MESSAGERECIPIENT
 CREATE OR REPLACE TRIGGER MSGRECEIVE_TRIGGER
 AFTER INSERT ON MESSAGES
 FOR EACH ROW
@@ -709,7 +709,7 @@ BEGIN
 	INSERT INTO MESSAGERECIPIENT VALUES(:new.msgID,:new.toUserID);
 END;
 /
-
+--after inserting into FRIENDS, delete that corresponding entry from PENDINGFRIENDS
 CREATE OR REPLACE TRIGGER PENDINGFRIENDS_TRIGGER
 AFTER INSERT ON FRIENDS
 FOR EACH ROW
@@ -720,8 +720,7 @@ BEGIN
 END;
 /
 
---SELECT * FROM SYS.USER_ERRORS WHERE NAME = 'PENDINGFRIENDS_TRIGGER' AND TYPE = 'TRIGGER';
-
+--after inserting into GROUPMEMBERSHIP, delete that corresponding entry from PENDINGGROUPMEMBERS
 CREATE OR REPLACE TRIGGER PENDINGGROUPMEMBERS_TRIGGER
 AFTER INSERT ON GROUPMEMBERSHIP
 FOR EACH ROW
@@ -730,3 +729,40 @@ BEGIN
 	WHERE (:new.gID = gID AND :new.userID = userID);
 END;
 /
+
+--checks a group's size limit before adding a new entry to PENDINGGROUPMEMBERS
+CREATE OR REPLACE TRIGGER INIT_ADDGROUP_TRIGGER
+BEFORE INSERT ON PENDINGGROUPMEMEBERS
+FOR EACH ROW
+DECLARE 
+groupSize integer:=0;
+groupLimit integer:=0;
+BEGIN
+	SELECT COUNT(*) INTO groupSize FROM GROUPS WHERE :new.gID = gID;
+	SELECT lim INTO groupLimit FROM GROUPS WHERE :new.gID = gID;
+	IF groupSize >= groupLimit THEN
+		raise_application_error(404, 'Group size limit reached, unable to insert into PENDINGGROUPMEMBERS');
+	END IF;
+END;
+/
+--send an individual or group message based on toUserID and toGroupID values
+CREATE OR REPLACE TRIGGER GROUP_MSGRECIPIENT_TRIGGER
+AFTER INSERT ON MESSAGES
+FOR EACH ROW
+DECLARE
+messageID varchar2(20):=null;
+usrID varchar2(20):=null;
+BEGIN
+	IF :new.toGroupID = null THEN
+		INSERT INTO MESSAGERECIPIENT VALUES(:new.msgID,:new.toUserID);
+	ELSE
+		SELECT msgID INTO messageID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
+		WHERE msgID = :new.msgID;
+		SELECT userID INTO usrID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
+		WHERE msgID = :new.msgID;
+		INSERT INTO MESSAGERECIPIENT VALUES(messageID,usrID);
+		
+	END IF;
+END;
+/
+--SELECT * FROM SYS.USER_ERRORS WHERE NAME = 'GROUP_MSGRECIPIENT_TRIGGER' AND TYPE = 'TRIGGER';

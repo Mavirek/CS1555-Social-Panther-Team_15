@@ -462,12 +462,139 @@ public class SocialPantherDB
 	public void displayFriends(String userID)
 	{
 		try{
+			//gather the user's friends
 			query = "SELECT name, userID1, userID2 "
-				+"FROM (FRIENDS JOIN PROFILE ON (((userID1 <> userID) AND (userID1 = ?)) "
-				+"OR ((userID2 <> userID) AND (userID2 = ?)))) "
+				+"FROM (FRIENDS JOIN PROFILE ON (((userID1 <> ?) AND (userID1 = userID)) "
+				+"OR ((userID2 <> ?) AND (userID2 = userID)))) "
 				+"WHERE userID1 = ? OR userID2 = ?";
+			prepStatement = connection.prepareStatement(query);
+			prepStatement.setString(1,userID);
+			prepStatement.setString(2,userID);
+			prepStatement.setString(3,userID);
+			prepStatement.setString(4,userID);
+			resultSet = prepStatement.executeQuery();
+			
+			System.out.println("Friends List:");
+			while(resultSet.next())
+			{
+				String friend = resultSet.getString("userID1");
+				if(userID.equals(friend))
+					System.out.println("Name: "+resultSet.getString("name")+" - UserID: "+resultSet.getString("userID2"));
+				else
+					System.out.println("Name: "+resultSet.getString("name")+" - UserID: "+friend);
+			}
+			
+			System.out.println("Enter a userID to retrieve a profile, or enter 0 to quit:");
+			Scanner s = new Scanner(System.in);
+			String id = s.nextLine();
+			while(!id.equals("0"))
+			{
+				query = "SELECT userID,name,email,dateOfBirth FROM PROFILE WHERE userID = ?";
+				prepStatement = connection.prepareStatement(query);
+				prepStatement.setString(1,id);
+				resultSet = prepStatement.executeQuery();
+				//display friend profile
+				System.out.println("UserID: "+resultSet.getString("userID"));
+				System.out.println("Name: "+resultSet.getString("name"));
+				System.out.println("Email: "+resultSet.getString("email"));
+				System.out.println("Date of birth: "+resultSet.getDate("dateOfBirth"));
+				System.out.println("\nEnter a userID to retrieve a profile, or enter 0 to quit:");
+				id = s.nextLine();
+			}
+		}
+		catch(SQLException e)
+		{
+			System.out.println("Error displaying friends");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+			return;
 		}
 	}
-  
-  
+	
+	public boolean initiateAddingGroup(String userID, String gID)
+	{
+		try{
+			Scanner s = new Scanner(System.in);
+			query = "INSERT INTO PENDINGGROUPMEMBERS values(?,?,?)";
+			prepStatement = connection.prepStatement(query);
+			System.out.println("Enter a message for the group membership request:");
+			String msg = s.nextLine();
+			prepStatement.setString(1,gID);
+			prepStatement.setString(2,userID);
+			prepStatement.setString(3,msg);
+			prepStatement.executeUpdate();
+			return true;
+		}
+		catch(SQLException e)
+		{
+			System.out.println("Error initiating group membership request");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+			return false;
+		}
+	}
+	
+	public boolean sendMessageToGroup(String userID, String gID)
+	{
+		try{
+			//check if user is in the group
+			query = "SELECT gID FROM GROUPMEMBERSHIP WHERE userID = ?";
+			prepStatement = connection.prepareStatement(query);
+			prepStatement.setString(1,userID);
+			resultSet = prepStatement.executeQuery();
+			while(resultSet.next())
+			{
+				if(!gID.equals(resultSet.getString("gID")))
+				//user is not part of the group
+				System.out.println("User is not part of the group!");
+				return false;
+			}
+			Scanner s = new Scanner(System.in);
+			System.out.println("Enter your message:");
+			String msg = s.nextLine();
+			query = "SELECT MAX(msgID) AS maxID FROM MESSAGES";
+			prepStatement = connection.prepStatement(query);
+			resultSet = prepStatement.executeQuery();
+			int maxID = 1;
+			if(resultSet.next())
+				maxID = resultSet.getInt("maxID");
+			java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
+			Calendar cal = Calendar.getInstance(); //current date
+			java.sql.Date date_reg = new java.sql.Date (cal.getTimeInMillis());
+			query = "INSERT INTO MESSAGES values(?,?,?,NULL,?,?)";
+			prepStatement = connection.prepStatement(query);
+			prepStatement.setString(1,maxID);
+			prepStatement.setString(2,userID);
+			prepStatement.setString(3,msg);
+			prepStatement.setString(4,gID);
+			prepStatement.setString(5,date_reg);
+			prepStatement.executeUpdate();
+			return true;
+		}
+		catch(SQLException e)
+		{
+			System.out.println("Error sending group message");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+			return false;
+		}
+	}
+	
+	public void displayNewMessages(String userID)
+	{
+		
+	}
+	
 }
