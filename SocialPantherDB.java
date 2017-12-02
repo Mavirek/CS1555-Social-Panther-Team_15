@@ -12,7 +12,7 @@ public class SocialPantherDB
 	private Timestamp lastLogin;
 	private ArrayList<String> threeDegPath;
 
-  public static void main(String args[]) throws SQLException
+  public void runDB() throws SQLException
   {
 	String username, password;
 	username = "alp170"; //This is your username in oracle
@@ -214,9 +214,9 @@ public class SocialPantherDB
 				for(Friend fromUser : fr)
 				{
 					try{
-						java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
+						//java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
 						Calendar cal = Calendar.getInstance(); //current date
-						java.sql.Date date_reg = new java.sql.Date (cal.getTimeInMillis());
+						java.sql.Date date_reg = new java.sql.Date (cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
 						String fUser = fromUser.getFromUser();
 						String msg = fromUser.getMsg();
 						query = "INSERT INTO FRIENDS values(?,?,?,?)";
@@ -248,9 +248,9 @@ public class SocialPantherDB
 				{
 					try{
 						Friend fromUser = fr.remove(choice-1); //choice-1 because 0 is to accept all friend requests
-						java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
+						//java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
 						Calendar cal = Calendar.getInstance(); //current date
-						java.sql.Date date_reg = new java.sql.Date (cal.getTimeInMillis());
+						java.sql.Date date_reg = new java.sql.Date (cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
 						String fUser = fromUser.getFromUser();
 						String msg = fromUser.getMsg();
 						query = "INSERT INTO FRIENDS values(?,?,?,?)";
@@ -516,7 +516,8 @@ public class SocialPantherDB
 		}
 	}
 	
-	public void createGroup(String gID, String name, String description, String userID, int limit) {
+	public void createGroup(String gID, String name, String description, String userID, int limit) 
+	{
 		int result = 1;
 		try {
 			query = "INSERT INTO GROUPS (?, ?, ?, ?)";
@@ -529,8 +530,8 @@ public class SocialPantherDB
 			prepStatement.setInt(4, limit);
 			result=prepStatement.executeUpdate();
 
-			query2 = "INSERT INTO GROUPMEMBERSHIP (?, ?, Manager)";
-			prepStatement = connection.prepareStatement(query2);
+			query = "INSERT INTO GROUPMEMBERSHIP (?, ?, Manager)";
+			prepStatement = connection.prepareStatement(query);
 
 			prepStatement.setString(1, gID);
 			prepStatement.setString(2, userID);
@@ -546,7 +547,7 @@ public class SocialPantherDB
 			}
 			return;
 		}
-
+	
 	}
 	
 	public boolean initiateAddingGroup(String userID, String gID)
@@ -600,9 +601,9 @@ public class SocialPantherDB
 			int maxID = 1;
 			if(resultSet.next())
 				maxID = resultSet.getInt("maxID");
-			java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
+			//java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
 			Calendar cal = Calendar.getInstance(); //current date
-			java.sql.Date date_reg = new java.sql.Date (cal.getTimeInMillis());
+			java.sql.Date date_reg = new java.sql.Date (cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
 			query = "INSERT INTO MESSAGES values(?,?,?,NULL,?,?)";
 			prepStatement = connection.prepareStatement(query);
 			prepStatement.setString(1,(maxID+""));
@@ -679,6 +680,45 @@ public class SocialPantherDB
 				e=e.getNextException();
 			}
 		}
+	}
+	
+	//display the top k users who have sent or received the highest number of messages
+	//during the past x months
+	public void topMessages(int x, int k)
+	{
+		try{
+			query = "SELECT * FROM "
+				+ "(SELECT toUserID, COUNT(msgID) as msgCnt "
+				+"FROM (MESSAGERECIPIENT JOIN MESSAGES ON (MESSAGERECIPIENT.userID = MESSAGES.toUserID)) "
+				+"WHERE dateSend >= ? GROUP BY toUserID, msgCnt ORDER BY msgCnt DESC) "
+				+ "WHERE rownum <= ? ORDER BY rownum";
+			//query = "SELECT msgID,fromID,toUserID,dateSend FROM MESSAGES ORDER BY dateSend DESC";
+			prepStatement = connection.prepareStatement(query);
+			Calendar cal = Calendar.getInstance();
+			cal.add(cal.get(Calendar.MONTH),-x);
+			java.sql.Date date_reg = new java.sql.Date(cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
+			prepStatement.setDate(1,date_reg);
+			prepStatement.setInt(2,k);
+			resultSet = prepStatement.executeQuery();
+			
+			System.out.println("Top "+k+" users who have the most message activity in the past "+x+" months:");
+			for(int i=1;i<=k;i++)
+			{
+				if(resultSet.next())
+					System.out.println(i+") "+resultSet.getString("toUserID")+" Messages: "+resultSet.getInt("msgCnt"));
+			}
+		}
+		catch(SQLException e)
+		{
+			System.out.println("Error top messages");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+		}
+		
 	}
 	
 	public void threeDegrees(String userA, String userB)
@@ -793,23 +833,51 @@ public class SocialPantherDB
 		return false;
 	}
 	
+	public boolean logOut(String userID)
+	{
+		try{
+			query = "UPDATE PROFILE SET lastLogin = CURRENT_TIMESTAMP WHERE userID = ?";
+			prepStatement = connection.prepareStatement(query);
+			prepStatement.setString(1,userID);
+			prepStatement.executeUpdate();
+			connection.close();
+			return true;
+		}
+		catch(SQLException e)
+		{
+			System.out.println("Error logging out user");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+		}
+		return false;
+	}
+	
 	public void sendMessageToUser(String toID, String fromID, String msgID) {
 		Scanner console = new Scanner(System.in);
 		System.out.println("Enter Message: ");
-		String msg = msg.nextLine();
-		int result = 1;
+		String msg = console.nextLine();
 		try {
+			query = "SELECT MAX(msgID) AS maxID FROM MESSAGES";
+			prepStatement = connection.prepareStatement(query);
+			resultSet = prepStatement.executeQuery();
+			int maxID = 1;
+			if(resultSet.next())
+				maxID = resultSet.getInt("maxID");
 			query = "INSERT INTO MESSAGES(?, ?, ?, ?, NULL, ?)";
 			prepStatement = connection.prepareStatement(query);
-			java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
+			//java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
 			Calendar cal = Calendar.getInstance(); //current date
-			java.sql.Date date_reg = new java.sql.Date (cal.getTimeInMillis());
-			prepStatement.setString(1, msgID);
+			java.sql.Date date_reg = new java.sql.Date(cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
+			prepStatement.setString(1, maxID+"");
 			prepStatement.setString(2, fromID);
 			prepStatement.setString(3, msg);
-			prepStatement.setString(4, toUserID);
-			prepStatement.setString(6, date_reg);
-			result = prepStatement.executeUpdate();
+			prepStatement.setString(4, toID);
+			prepStatement.setDate(6, date_reg);
+			prepStatement.executeUpdate();
 		}
 		catch(SQLException e) {
 			System.out.println("Exception found!");
@@ -829,21 +897,24 @@ public class SocialPantherDB
 		int result = 1;
 		try {
 			// assuming that the user your are looking for is in userID2 of FRIENDS table
-			query = "SELECT PROFILE.name, FRIENDS.userID2 " +
-							"FROM FRIENDS INNER JOIN PROFILE ON FRIENDS.userID1 = PROFILE.userID " +
-							"WHERE FRIENDS.userID2 = ?";
+			query = "SELECT name,userID FROM PROFILE WHERE name LIKE ?";
 			ArrayList<String> list = new ArrayList<String>();
 			// seperates the given string into sepearte individual strings
 			StringTokenizer st = new StringTokenizer(matchUser);
-     			while (st.hasMoreTokens()) {
-			 // adds a new string(token) to the list list(1), list(2), ...
-         		System.out.println(list.add(st.nextToken));
-     			}
-		 	prepStatement.connection(query);
+			while (st.hasMoreTokens()) {
+				// adds a new string(token) to the list list(1), list(2), ...
+				System.out.println(list.add(st.nextToken()));
+			}
+		 	prepStatement = connection.prepareStatement(query);
 		 	while(i < list.size()) {
-			 prepStatement.setString(1, list.get(i));
-			 result = prepStatement.executeQuery();
-			 i++;
+				 prepStatement.setString(1, list.get(i));
+				 resultSet = prepStatement.executeQuery();
+				 i++;
+				while(resultSet.next())
+				{
+					System.out.println("Name - "+resultSet.getString("name"));
+					System.out.println("UserID - "+resultSet.getString("userID"));
+				}
 		 	}
 		}
 		catch(SQLException e) {
@@ -857,5 +928,4 @@ public class SocialPantherDB
 			return;
 		}
 	}
-	
 }
