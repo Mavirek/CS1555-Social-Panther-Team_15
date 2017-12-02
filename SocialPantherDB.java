@@ -793,4 +793,69 @@ public class SocialPantherDB
 		return false;
 	}
 	
+	public void sendMessageToUser(String toID, String fromID, String msgID) {
+		Scanner console = new Scanner(System.in);
+		System.out.println("Enter Message: ");
+		String msg = msg.nextLine();
+		int result = 1;
+		try {
+			query = "INSERT INTO MESSAGES(?, ?, ?, ?, NULL, ?)";
+			prepStatement = connection.prepareStatement(query);
+			java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
+			Calendar cal = Calendar.getInstance(); //current date
+			java.sql.Date date_reg = new java.sql.Date (cal.getTimeInMillis());
+			prepStatement.setString(1, msgID);
+			prepStatement.setString(2, fromID);
+			prepStatement.setString(3, msg);
+			prepStatement.setString(4, toUserID);
+			prepStatement.setString(6, date_reg);
+			result = prepStatement.executeUpdate();
+		}
+		catch(SQLException e) {
+			System.out.println("Exception found!");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+			return;
+		}
+	}
+
+
+	public void searchForUser(String matchUser) {
+		int i = 0;
+		int result = 1;
+		try {
+			// assuming that the user your are looking for is in userID2 of FRIENDS table
+			query = "SELECT PROFILE.name, FRIENDS.userID2 " +
+							"FROM FRIENDS INNER JOIN PROFILE ON FRIENDS.userID1 = PROFILE.userID " +
+							"WHERE FRIENDS.userID2 = ?";
+			ArrayList<String> list = new ArrayList<String>();
+			// seperates the given string into sepearte individual strings
+			StringTokenizer st = new StringTokenizer(matchUser);
+     			while (st.hasMoreTokens()) {
+			 // adds a new string(token) to the list list(1), list(2), ...
+         		System.out.println(list.add(st.nextToken));
+     			}
+		 	prepStatement.connection(query);
+		 	while(i < list.size()) {
+			 prepStatement.setString(1, list.get(i));
+			 result = prepStatement.executeQuery();
+			 i++;
+		 	}
+		}
+		catch(SQLException e) {
+			System.out.println("Exception found!");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+			return;
+		}
+	}
+	
 }
