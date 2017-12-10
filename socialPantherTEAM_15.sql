@@ -40,7 +40,7 @@ CREATE TABLE PENDINGFRIENDS(
 );
 -- A couple tables reference the table GROUPS
 CREATE TABLE GROUPS(
-  gID varchar2(20) not null deferrable,
+  gID integer not null deferrable,
   name varchar2(50) not null deferrable,
   description varchar2(200),
   lim integer not null deferrable,
@@ -52,8 +52,8 @@ CREATE TABLE MESSAGES(
   fromID varchar2(20),
   message varchar2(200) default null,
   toUserID varchar2(20),
-  toGroupID varchar2(20) default null,
-  dateSend date not null deferrable,
+  toGroupID integer default null,
+  dateSend timestamp not null deferrable,
   CONSTRAINT MESSAGES_PK PRIMARY KEY (msgID) INITIALLY IMMEDIATE DEFERRABLE,
   CONSTRAINT MESSAGES_FK1 FOREIGN KEY (fromID) REFERENCES PROFILE(userID) INITIALLY IMMEDIATE DEFERRABLE,
   CONSTRAINT MESSAGES_FK2 FOREIGN KEY (toUserID) REFERENCES PROFILE(userID) INITIALLY IMMEDIATE DEFERRABLE,
@@ -69,7 +69,7 @@ CREATE TABLE MESSAGERECIPIENT(
 );
 
 CREATE TABLE PENDINGGROUPMEMBERS(
-  gID varchar2(20) not null deferrable,
+  gID integer not null deferrable,
   userID varchar2(20) not null deferrable,
   message varchar2(200) default null,
   CONSTRAINT PENDINGGROUPMEMBERS_PK PRIMARY KEY (gID,userID) INITIALLY IMMEDIATE DEFERRABLE,
@@ -78,7 +78,7 @@ CREATE TABLE PENDINGGROUPMEMBERS(
 );
 
 CREATE TABLE GROUPMEMBERSHIP(
-  gID varchar2(20) not null deferrable,
+  gID integer not null deferrable,
   userID varchar2(20) not null deferrable,
   role varchar2(20) default('Member'),
   CONSTRAINT GROUPMEMBERSHIP_PK PRIMARY KEY (gID, userID) INITIALLY IMMEDIATE DEFERRABLE,
@@ -712,7 +712,13 @@ CREATE OR REPLACE TRIGGER MSGRECEIVE_TRIGGER
 AFTER INSERT ON MESSAGES
 FOR EACH ROW
 BEGIN
-	INSERT INTO MESSAGERECIPIENT VALUES(:new.msgID,:new.toUserID);
+	IF :new.toUserID IS NOT NULL THEN
+		INSERT INTO MESSAGERECIPIENT VALUES(:new.msgID,:new.toUserID);
+	ELSIF :new.toGroupID IS NOT NULL THEN
+		INSERT INTO MESSAGERECIPIENT(msgID, userID)
+		SELECT :new.msgID, userID FROM GROUPMEMBERSHIP
+		WHERE gID = :new.toGroupID;
+	END IF;
 END;
 /
 --after inserting into FRIENDS, delete that corresponding entry from PENDINGFRIENDS
@@ -752,8 +758,8 @@ BEGIN
 END;
 /
 --send an individual or group message based on toUserID and toGroupID values
-CREATE OR REPLACE TRIGGER GROUP_MSGRECIPIENT_TRIGGER
-AFTER INSERT ON MESSAGES
+/* CREATE OR REPLACE TRIGGER GROUP_MSGRECIPIENT_TRIGGER
+BEFORE INSERT ON MESSAGES
 FOR EACH ROW
 DECLARE
 messageID varchar2(20):=null;
@@ -762,16 +768,28 @@ BEGIN
 	IF :new.toGroupID = null THEN
 		INSERT INTO MESSAGERECIPIENT VALUES(:new.msgID,:new.toUserID);
 	ELSE
-		SELECT msgID INTO messageID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
+		SELECT msgID, userID INTO messageID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
 		WHERE msgID = :new.msgID;
-		SELECT userID INTO usrID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
+		---SELECT userID INTO usrID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
 		WHERE msgID = :new.msgID;
 		INSERT INTO MESSAGERECIPIENT VALUES(messageID,usrID);
 		
 	END IF;
 END;
+/ */
+/* 
+CREATE OR REPLACE TRIGGER GROUP_MSGRECIPIENT_TRIGGER
+AFTER INSERT ON MESSAGES
+FOR EACH ROW
+BEGIN
+	IF :new.toGroupID IS NOT NULL THEN
+		INSERT INTO MESSAGERECIPIENT(:new.msgID, :new.userID)
+		SELECT :new.msgID, g.userID FROM GROUPMEMBERSHIP g
+		WHERE g.gID = :new.toGroupID;
+	END IF;
+END;
 /
-
+ */
 
 CREATE OR REPLACE TRIGGER DELETE_USER_TRIGGER
 AFTER DELETE ON PROFILE

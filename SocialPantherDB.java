@@ -34,10 +34,6 @@ public class SocialPantherDB
 		System.out.println("Error connecting to database.  Machine Error: " +
 				   Ex.toString());
 	}
-	finally
-	{
-		connection.close();
-	}
   }
   
   public int createUser(String userID, String name, String email, String pass, String dob)
@@ -180,7 +176,7 @@ public class SocialPantherDB
 		return false;
   }
   
-	public void confirmFriendship(String userID, String gID)
+	public void confirmFriendship(String userID)
     {
 	 try{
 			 Scanner s = new Scanner(System.in);
@@ -188,10 +184,12 @@ public class SocialPantherDB
 			 prepStatement = connection.prepareStatement(query);
 			 prepStatement.setString(1,userID);
 			 resultSet = prepStatement.executeQuery();
-			 if(!resultSet.first())
+			 if(!resultSet.next())
 			 {
 				 System.out.println("No outstanding friend requests!");
 				 //proceed to confirming group memberships
+				 System.out.println("Enter the groupID to confirm group membership requests for:");
+				 String gID = s.nextLine();
 				 confirmGroupMembership(userID,gID);
 				 return;
 			 }
@@ -304,6 +302,9 @@ public class SocialPantherDB
 				
 			}
 			//proceed to confirming group memberships
+			s.nextLine();
+			System.out.println("Enter the groupID to confirm group membership requests for:");
+			String gID = s.nextLine();
 			confirmGroupMembership(userID,gID);
 		}
 		catch(SQLException e)
@@ -328,7 +329,7 @@ public class SocialPantherDB
 			 prepStatement = connection.prepareStatement(query);
 			 prepStatement.setString(1,userID);
 			 resultSet = prepStatement.executeQuery();
-			 if(!resultSet.first())
+			 if(!resultSet.next())
 			 {
 				 System.out.println("User is not the manager of any groups");
 				 return;
@@ -344,7 +345,11 @@ public class SocialPantherDB
 			 prepStatement.setString(1,userID);
 			 resultSet = prepStatement.executeQuery();
 			 
-			 
+			 if(!resultSet.next())
+			 {
+				 System.out.println("No outstanding group member requests");
+				 return;
+			 }
 			 int num=1;
 			 ArrayList<GroupMember> gr = new ArrayList<GroupMember>();
 			 System.out.println("Outstanding group member requests:");
@@ -494,6 +499,7 @@ public class SocialPantherDB
 				prepStatement = connection.prepareStatement(query);
 				prepStatement.setString(1,id);
 				resultSet = prepStatement.executeQuery();
+				resultSet.next();
 				//display friend profile
 				System.out.println("UserID: "+resultSet.getString("userID"));
 				System.out.println("Name: "+resultSet.getString("name"));
@@ -516,26 +522,37 @@ public class SocialPantherDB
 		}
 	}
 	
-	public void createGroup(String gID, String name, String description, String userID, int limit) 
+	public void createGroup(String name, String description, String userID, int limit) 
 	{
 		int result = 1;
 		try {
-			query = "INSERT INTO GROUPS (?, ?, ?, ?)";
+			query = "SELECT COUNT(gID) AS maxGID FROM GROUPS";
+			prepStatement = connection.prepareStatement(query);
+			resultSet = prepStatement.executeQuery();
+			int maxGID = 1;
+			if(resultSet.next())
+			{
+				maxGID = resultSet.getInt("maxGID");
+				System.out.println("before maxGID = "+maxGID);
+				maxGID++;
+			}
+			query = "INSERT INTO GROUPS values(?, ?, ?, ?)";
 			prepStatement = connection.prepareStatement(query);
 
 			// generate random group ID for the new group
-			prepStatement.setString(1, gID);
+			System.out.println("maxGID = "+maxGID);
+			prepStatement.setString(1, maxGID+"");
 			prepStatement.setString(2, name);
 			prepStatement.setString(3, description);
 			prepStatement.setInt(4, limit);
-			result=prepStatement.executeUpdate();
+			prepStatement.executeUpdate();
 
-			query = "INSERT INTO GROUPMEMBERSHIP (?, ?, Manager)";
+			query = "INSERT INTO GROUPMEMBERSHIP values(?, ?, 'Manager')";
 			prepStatement = connection.prepareStatement(query);
 
-			prepStatement.setString(1, gID);
+			prepStatement.setString(1, maxGID+"");
 			prepStatement.setString(2, userID);
-			result = prepStatement.executeUpdate();
+			prepStatement.executeUpdate();
 		}
 		catch(SQLException e) {
 			System.out.println("Exception found!");
@@ -581,26 +598,28 @@ public class SocialPantherDB
 	{
 		try{
 			//check if user is in the group
-			query = "SELECT gID FROM GROUPMEMBERSHIP WHERE userID = ?";
+			query = "SELECT gID FROM GROUPMEMBERSHIP WHERE userID = ? AND gID = ?";
 			prepStatement = connection.prepareStatement(query);
 			prepStatement.setString(1,userID);
+			prepStatement.setString(2,gID);
 			resultSet = prepStatement.executeQuery();
-			while(resultSet.next())
+			if(!resultSet.next())
 			{
-				if(!gID.equals(resultSet.getString("gID")))
-				//user is not part of the group
 				System.out.println("User is not part of the group!");
 				return false;
 			}
 			Scanner s = new Scanner(System.in);
 			System.out.println("Enter your message:");
 			String msg = s.nextLine();
-			query = "SELECT MAX(msgID) AS maxID FROM MESSAGES";
+			query = "SELECT COUNT(msgID) AS maxID FROM MESSAGES";
 			prepStatement = connection.prepareStatement(query);
 			resultSet = prepStatement.executeQuery();
 			int maxID = 1;
 			if(resultSet.next())
+			{
 				maxID = resultSet.getInt("maxID");
+				maxID++;
+			}
 			//java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
 			Calendar cal = Calendar.getInstance(); //current date
 			java.sql.Date date_reg = new java.sql.Date (cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
@@ -640,6 +659,7 @@ public class SocialPantherDB
 				System.out.println("From: "+resultSet.getString("fromID"));
 				System.out.println("Date Sent: "+resultSet.getDate("dateSend"));
 				System.out.println("Message: "+resultSet.getString("message"));
+				System.out.println();
 			}
 		}
 		catch(SQLException e)
@@ -657,7 +677,8 @@ public class SocialPantherDB
 	public void displayNewMessages(String userID)
 	{
 		try{
-			query = "SELECT fromID, message, dateSend FROM MESSAGES WHERE toUserID = ? AND dateSend > ? ORDER BY dateSend DESC";
+			query = "SELECT fromID, message, dateSend FROM (MESSAGERECIPIENT JOIN MESSAGES ON (MESSAGERECIPIENT.userID = MESSAGES.toUserID)) WHERE toUserID = ? AND dateSend > ? ORDER BY dateSend DESC";
+			System.out.println("lastLogin = "+lastLogin);
 			prepStatement = connection.prepareStatement(query);
 			prepStatement.setString(1,userID);
 			prepStatement.setTimestamp(2,lastLogin);
@@ -688,9 +709,9 @@ public class SocialPantherDB
 	{
 		try{
 			query = "SELECT * FROM "
-				+ "(SELECT toUserID, COUNT(msgID) as msgCnt "
+				+ "(SELECT toUserID, COUNT(MESSAGES.msgID) as msgCnt "
 				+"FROM (MESSAGERECIPIENT JOIN MESSAGES ON (MESSAGERECIPIENT.userID = MESSAGES.toUserID)) "
-				+"WHERE dateSend >= ? GROUP BY toUserID, msgCnt ORDER BY msgCnt DESC) "
+				+"WHERE dateSend >= ? GROUP BY toUserID ORDER BY msgCnt DESC) "
 				+ "WHERE rownum <= ? ORDER BY rownum";
 			//query = "SELECT msgID,fromID,toUserID,dateSend FROM MESSAGES ORDER BY dateSend DESC";
 			prepStatement = connection.prepareStatement(query);
@@ -856,27 +877,31 @@ public class SocialPantherDB
 		return false;
 	}
 	
-	public void sendMessageToUser(String toID, String fromID, String msgID) {
+	public void sendMessageToUser(String toID, String fromID) {
 		Scanner console = new Scanner(System.in);
 		System.out.println("Enter Message: ");
 		String msg = console.nextLine();
 		try {
-			query = "SELECT MAX(msgID) AS maxID FROM MESSAGES";
+			query = "SELECT COUNT(msgID) AS maxID FROM MESSAGES";
 			prepStatement = connection.prepareStatement(query);
 			resultSet = prepStatement.executeQuery();
 			int maxID = 1;
 			if(resultSet.next())
+			{
 				maxID = resultSet.getInt("maxID");
-			query = "INSERT INTO MESSAGES(?, ?, ?, ?, NULL, ?)";
+				maxID++;
+			}
+			query = "INSERT INTO MESSAGES values(?, ?, ?, ?, NULL, ?)";
 			prepStatement = connection.prepareStatement(query);
 			//java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd-MM-yyyy");
-			Calendar cal = Calendar.getInstance(); //current date
-			java.sql.Date date_reg = new java.sql.Date(cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
+			//Calendar cal = Calendar.getInstance(); //current date
+			//java.sql.Date date_reg = new java.sql.Date(cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
+			java.util.Date date = new java.util.Date();
 			prepStatement.setString(1, maxID+"");
 			prepStatement.setString(2, fromID);
 			prepStatement.setString(3, msg);
 			prepStatement.setString(4, toID);
-			prepStatement.setDate(6, date_reg);
+			prepStatement.setTimestamp(5, new Timestamp(date.getTime()));
 			prepStatement.executeUpdate();
 		}
 		catch(SQLException e) {
@@ -903,7 +928,7 @@ public class SocialPantherDB
 			StringTokenizer st = new StringTokenizer(matchUser);
 			while (st.hasMoreTokens()) {
 				// adds a new string(token) to the list list(1), list(2), ...
-				System.out.println(list.add(st.nextToken()));
+				list.add(st.nextToken());
 			}
 		 	prepStatement = connection.prepareStatement(query);
 		 	while(i < list.size()) {
