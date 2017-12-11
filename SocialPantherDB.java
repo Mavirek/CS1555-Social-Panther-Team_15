@@ -10,7 +10,6 @@ public class SocialPantherDB
     // exists)
     private String query;  //this will hold the query we are using
 	private Timestamp lastLogin;
-	private ArrayList<String> threeDegPath;
 
   public void runDB() throws SQLException
   {
@@ -103,6 +102,7 @@ public class SocialPantherDB
 	  catch(SQLException e)
 	  {
 		System.out.println("Error logging in user "+userID);
+		System.out.println("Account not found");
 		while(e!=null)
 		{
 			System.out.println("Message - "+e.getMessage());
@@ -188,6 +188,7 @@ public class SocialPantherDB
 			 {
 				 System.out.println("No outstanding friend requests!");
 				 //proceed to confirming group memberships
+				 showGroups();
 				 System.out.println("Enter the groupID to confirm group membership requests for:");
 				 String gID = s.nextLine();
 				 confirmGroupMembership(userID,gID);
@@ -303,6 +304,7 @@ public class SocialPantherDB
 			}
 			//proceed to confirming group memberships
 			s.nextLine();
+			showGroups();
 			System.out.println("Enter the groupID to confirm group membership requests for:");
 			String gID = s.nextLine();
 			confirmGroupMembership(userID,gID);
@@ -533,14 +535,14 @@ public class SocialPantherDB
 			if(resultSet.next())
 			{
 				maxGID = resultSet.getInt("maxGID");
-				System.out.println("before maxGID = "+maxGID);
+				//System.out.println("before maxGID = "+maxGID);
 				maxGID++;
 			}
 			query = "INSERT INTO GROUPS values(?, ?, ?, ?)";
 			prepStatement = connection.prepareStatement(query);
 
 			// generate random group ID for the new group
-			System.out.println("maxGID = "+maxGID);
+			System.out.println("Remember your GroupID = "+maxGID);
 			prepStatement.setString(1, maxGID+"");
 			prepStatement.setString(2, name);
 			prepStatement.setString(3, description);
@@ -709,15 +711,15 @@ public class SocialPantherDB
 	{
 		try{
 			query = "SELECT * FROM "
-				+ "(SELECT toUserID, COUNT(MESSAGES.msgID) as msgCnt "
-				+"FROM (MESSAGERECIPIENT JOIN MESSAGES ON (MESSAGERECIPIENT.userID = MESSAGES.toUserID)) "
-				+"WHERE dateSend >= ? GROUP BY toUserID ORDER BY msgCnt DESC) "
+				+ "(SELECT fromID, COUNT(msgID) as msgCnt FROM MESSAGES "
+				+ "WHERE dateSend >= ? GROUP BY fromID ORDER BY msgCnt DESC) "
 				+ "WHERE rownum <= ? ORDER BY rownum";
 			//query = "SELECT msgID,fromID,toUserID,dateSend FROM MESSAGES ORDER BY dateSend DESC";
 			prepStatement = connection.prepareStatement(query);
 			Calendar cal = Calendar.getInstance();
-			cal.add(cal.get(Calendar.MONTH),-x);
-			java.sql.Date date_reg = new java.sql.Date(cal.get(Calendar.DAY_OF_MONTH),cal.get(Calendar.MONTH),cal.get(Calendar.YEAR));
+			cal.add(Calendar.MONTH,-x);
+			java.sql.Date date_reg = new java.sql.Date(cal.getTimeInMillis());
+			System.out.println(date_reg);
 			prepStatement.setDate(1,date_reg);
 			prepStatement.setInt(2,k);
 			resultSet = prepStatement.executeQuery();
@@ -726,7 +728,7 @@ public class SocialPantherDB
 			for(int i=1;i<=k;i++)
 			{
 				if(resultSet.next())
-					System.out.println(i+") "+resultSet.getString("toUserID")+" Messages: "+resultSet.getInt("msgCnt"));
+					System.out.println(i+") "+resultSet.getString("fromID")+" Messages: "+resultSet.getInt("msgCnt"));
 			}
 		}
 		catch(SQLException e)
@@ -745,91 +747,88 @@ public class SocialPantherDB
 	public void threeDegrees(String userA, String userB)
 	{
 		try{
-			ArrayList<String> friends = new ArrayList<String>();
-			query = "SELECT userID1,userID2 FROM FRIENDS WHERE userID1 = ? OR userID2 = ?";
-			prepStatement = connection.prepareStatement(query);
-			prepStatement.setString(1,userA);
-			prepStatement.setString(2,userA);
-			resultSet = prepStatement.executeQuery();
-			while(resultSet.next())
+			ArrayList<String> resultPath = new ArrayList<String>();
+			ArrayList<String> threeDegPath = threeDegRec(userA,userB,resultPath);
+			if(threeDegPath!=null)
 			{
-				String f = resultSet.getString("userID1");
-				if(f.equals(userA))
-					f = resultSet.getString("userID2");
-				//add all of userA's friends
-				friends.add(f);
-			}
-			threeDegPath.add(userA);
-			for(String friend : friends)
-			{
-				if(threeDegRec(friend,userB))
+				System.out.println("Path found from "+userA+" to "+userB);
+				//System.out.println("path size = "+threeDegPath.size());
+				for(int x=0; x<threeDegPath.size(); x++)
 				{
-					System.out.println("Path from "+userA+" to "+userB);
-					for(String path : threeDegPath)
-					{
-						if(!path.equals(userB))
-							System.out.print(path+" -> ");
-						else
-							System.out.println(path);
-					}
+					if(x==threeDegPath.size()-1)
+						System.out.println(threeDegPath.get(x));
+					else
+						System.out.print(threeDegPath.get(x)+" -> ");
 				}
 			}
+			else
+				System.out.println("No path found from "+userA+" to "+userB);
 		}
-		catch(SQLException e)
+		catch(Exception e)
 		{
 			System.out.println("Error finding three degrees path");
-			while(e!=null)
-			{
-				System.out.println("Message - "+e.getMessage());
-				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
-				e=e.getNextException();
-			}
+			System.out.println(e);
 		}
 		return;
 	}
 	
-	public boolean threeDegRec(String user, String targetUser)
+	public ArrayList<String> threeDegRec(String userA, String userB, ArrayList<String> path)
 	{
-		if (threeDegPath.size()>3)
-			return false;
-		if(targetUser.equals(user)) //found targetUser
-			return true;
-		try{
-			ArrayList<String> friends = new ArrayList<String>();
-			query = "SELECT userID1,userID2 FROM FRIENDS WHERE userID1 = ? OR userID2 = ?";
-			prepStatement = connection.prepareStatement(query);
-			prepStatement.setString(1,user);
-			prepStatement.setString(2,user);
-			resultSet = prepStatement.executeQuery();
-			while(resultSet.next())
-			{
-				String f = resultSet.getString("userID1");
-				if(f.equals(user))
-					f = resultSet.getString("userID2");
-				//add all of user's friends
-				friends.add(f);
-			}
-			threeDegPath.add(user);
-			for(String friend : friends)
-			{
-				threeDegPath.add(friend);
-				if(threeDegRec(friend,targetUser))
-					return true;
-				else
-					threeDegPath.remove(threeDegPath.size()-1); //undo the previous add
-			}
-		}
-		catch(SQLException e)
+		if (path.size()>=3)
+			return null;
+		else
 		{
-			System.out.println("Error finding three degrees path");
-			while(e!=null)
+			try{
+				path.add(userA);
+				query = "SELECT userID1,userID2 FROM FRIENDS WHERE userID1 = ? OR userID2 = ?";
+				prepStatement = connection.prepareStatement(query,ResultSet.TYPE_SCROLL_INSENSITIVE,ResultSet.CONCUR_UPDATABLE);
+				prepStatement.setString(1,userA);
+				prepStatement.setString(2,userA);
+				resultSet = prepStatement.executeQuery();
+				//retrieve the friends of userA and check if either userID1 and userID2 contain the target user
+				while(resultSet.next())
+				{
+					String f1 = resultSet.getString("userID1");
+					String f2 = resultSet.getString("userID2");
+					if(f1.equals(userB) || f2.equals(userB))
+					{
+						path.add(userB);
+						return path;
+					}
+				}
+				//did not find target user, continue checking the rest of the mutual friends
+				ArrayList<String> testPath = new ArrayList<String>();
+				resultSet.first();
+				//System.out.println(path.toString());
+				do
+				{
+					if(userA.equals(resultSet.getString("userID1")))
+						testPath = threeDegRec(resultSet.getString("userID2"),userB,path);
+					else
+						testPath = threeDegRec(resultSet.getString("userID1"),userB,path);
+					if(testPath!=null)
+						break;
+				}while(resultSet.next());
+				if(testPath!=null)
+					return testPath;
+				else
+				{
+					path.remove(path.size()-1);
+					return null;
+				}
+			}
+			catch(SQLException e)
 			{
-				System.out.println("Message - "+e.getMessage());
-				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
-				e=e.getNextException();
+				System.out.println("Error finding three degrees path");
+				while(e!=null)
+				{
+					System.out.println("Message - "+e.getMessage());
+					System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+					e=e.getNextException();
+				}
 			}
 		}
-		return false;
+		return null;
 	}
 	
 	public boolean dropUser(String userID)
@@ -934,13 +933,41 @@ public class SocialPantherDB
 		 	while(i < list.size()) {
 				 prepStatement.setString(1, list.get(i));
 				 resultSet = prepStatement.executeQuery();
-				 i++;
-				while(resultSet.next())
+
+				if(!resultSet.next())
+				{
+					System.out.println("No user found with the name: "+list.get(i));
+				}
+				do
 				{
 					System.out.println("Name - "+resultSet.getString("name"));
 					System.out.println("UserID - "+resultSet.getString("userID"));
-				}
+				}while(resultSet.next());
+				i++;
 		 	}
+		}
+		catch(SQLException e) {
+			System.out.println("Exception found!");
+			while(e!=null)
+			{
+				System.out.println("Message - "+e.getMessage());
+				System.out.println("State - "+e.getSQLState()+" - "+e.getErrorCode());
+				e=e.getNextException();
+			}
+			return;
+		}
+	}
+	
+	public void showGroups()
+	{
+		try {
+			query = "SELECT gID,name FROM GROUPS";
+			prepStatement = connection.prepareStatement(query);
+			resultSet = prepStatement.executeQuery();
+			while(resultSet.next())
+			{
+				System.out.println(resultSet.getInt("gID")+") "+resultSet.getString("name"));
+			}
 		}
 		catch(SQLException e) {
 			System.out.println("Exception found!");

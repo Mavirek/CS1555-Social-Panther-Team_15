@@ -33,6 +33,9 @@ public class SocialPantherDriver
 				{
 					System.out.println("Account successfully created");
 					System.out.println("Your userID is "+userID);
+					//assumes each user is given a generated 5 char alphanumeric userID, just like
+					//how pitt gives each student their own username
+					//each user is assumed to have to memorize their userID
 				}
 				else
 					System.out.println("Account unable to be created");
@@ -46,7 +49,10 @@ public class SocialPantherDriver
 				if(db.login(userID,pass))
 					System.out.println("Successfully logged in");
 				else
+				{
 					System.out.println("Unable to log in");
+					System.exit(0);
+				}
 				break;
 			case 3:
 				System.out.println("Exiting Social Panther. Good bye!");
@@ -69,6 +75,8 @@ public class SocialPantherDriver
 						if(!db.initiateFriendship(userID,toUser))
 							System.out.println("Unable to send friend request");
 						break;
+					//confirm friend requests and group membership requests
+					//assumes the group manager(s) knows their groupID 
 					case 2:
 						db.confirmFriendship(userID);
 						break;
@@ -87,6 +95,7 @@ public class SocialPantherDriver
 						break;
 					case 5:
 						s.nextLine();
+						db.showGroups();
 						System.out.println("Enter the groupID to send a group membership request to:");
 						String gid = s.nextLine();
 						if(db.initiateAddingGroup(userID,gid))
@@ -94,6 +103,7 @@ public class SocialPantherDriver
 						break;
 					case 6:
 						s.nextLine();
+						db.showGroups();
 						System.out.println("Enter the groupID to send a group message to:");
 						gid = s.nextLine();
 						if(db.sendMessageToGroup(userID,gid))
@@ -120,11 +130,11 @@ public class SocialPantherDriver
 						db.threeDegrees(userID,userB);
 						break;
 					case 11:
-						s.nextLine();
-						System.out.println("Enter the userID to delete:");
-						userB = s.nextLine();
-						if(db.dropUser(userB))
+						if(db.dropUser(userID))
+						{
 							System.out.println("Successfully deleted user");
+							System.exit(0);
+						}
 						break;
 					case 12:
 						s.nextLine();
@@ -162,7 +172,7 @@ public class SocialPantherDriver
 		System.out.println("8. Display new messages");
 		System.out.println("9. Display the top k users with the most activity in the past x months");
 		System.out.println("10. Display Three Degrees path from one user to another user");
-		System.out.println("11. Delete a user");
+		System.out.println("11. Delete your account");
 		System.out.println("12. Send a message to a user");
 		System.out.println("13. Search for a user");
 		System.out.println("14. Logout");

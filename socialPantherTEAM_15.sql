@@ -707,6 +707,30 @@ INSERT INTO MESSAGES values('299', '38eec', 'Sample Text', '1a812', null, '13-De
 INSERT INTO MESSAGES values('300', 'a29bb', 'asjdklfjlkdf', '2b1e4', null, '6-January-1955');
 
 commit;
+--duplicate friends trigger
+CREATE OR REPLACE TRIGGER DUPL_FRIEND_TRIGGER
+BEFORE INSERT ON FRIENDS
+FOR EACH ROW
+DECLARE cnt number:=0;
+BEGIN
+	SELECT COUNT(*) INTO cnt FROM FRIENDS WHERE userID1 = :new.userID2 AND userID2 = :new.userID1;
+	IF cnt>0 THEN
+		raise_application_error(405, 'Duplicate friend detected');
+	END IF;
+END;
+/
+--duplicate pendingfriends trigger
+CREATE OR REPLACE TRIGGER DUPL_PENDINGFRIEND_TRIGGER
+BEFORE INSERT ON PENDINGFRIENDS
+FOR EACH ROW
+DECLARE cnt number:=0;
+BEGIN
+	SELECT COUNT(*) INTO cnt FROM PENDINGFRIENDS WHERE toID = :new.fromID AND fromID = :new.toID;
+	IF cnt>0 THEN
+		raise_application_error(406, 'Duplicate friend request detected');
+	END IF;
+END;
+/
 --after inserting into MESSAGES, insert that corresponding entry into MESSAGERECIPIENT
 CREATE OR REPLACE TRIGGER MSGRECEIVE_TRIGGER
 AFTER INSERT ON MESSAGES
@@ -757,39 +781,14 @@ BEGIN
 	END IF;
 END;
 /
---send an individual or group message based on toUserID and toGroupID values
-/* CREATE OR REPLACE TRIGGER GROUP_MSGRECIPIENT_TRIGGER
-BEFORE INSERT ON MESSAGES
-FOR EACH ROW
-DECLARE
-messageID varchar2(20):=null;
-usrID varchar2(20):=null;
+--delete messages that have both the fromID and toUserID deleted as a result of profile deletions
+CREATE OR REPLACE TRIGGER MSG_HANDLING_TRIGGER
+AFTER DELETE ON PROFILE
 BEGIN
-	IF :new.toGroupID = null THEN
-		INSERT INTO MESSAGERECIPIENT VALUES(:new.msgID,:new.toUserID);
-	ELSE
-		SELECT msgID, userID INTO messageID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
-		WHERE msgID = :new.msgID;
-		---SELECT userID INTO usrID FROM (GROUPMEMBERSHIP JOIN MESSAGES ON (gID=toGroupID))
-		WHERE msgID = :new.msgID;
-		INSERT INTO MESSAGERECIPIENT VALUES(messageID,usrID);
-		
-	END IF;
-END;
-/ */
-/* 
-CREATE OR REPLACE TRIGGER GROUP_MSGRECIPIENT_TRIGGER
-AFTER INSERT ON MESSAGES
-FOR EACH ROW
-BEGIN
-	IF :new.toGroupID IS NOT NULL THEN
-		INSERT INTO MESSAGERECIPIENT(:new.msgID, :new.userID)
-		SELECT :new.msgID, g.userID FROM GROUPMEMBERSHIP g
-		WHERE g.gID = :new.toGroupID;
-	END IF;
+	DELETE FROM MESSAGES WHERE msgID IN 
+		(SELECT msgID FROM MESSAGES WHERE fromID = null AND toUserID = null AND toGroupID = null);
 END;
 /
- */
 
 CREATE OR REPLACE TRIGGER DELETE_USER_TRIGGER
 AFTER DELETE ON PROFILE
